@@ -5,5 +5,6 @@
 Requires:
 
 - install Bundle::LWP
+- install LWP:Protocol:https
 - install HTML::Tree
 - install HTML::Format
