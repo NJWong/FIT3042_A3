@@ -29,6 +29,7 @@ my $cwd = getcwd;
 
 # List of 100 most common words that we won't index
 # Taken from https://en.wikipedia.org/wiki/Most_common_words_in_English
+# TODO move this to an exclude file
 my @word_blacklist = qw( the be to of and a in that have I it for not on with
                         he as you do at this but his by from they we say her
                         she or an will my one all would there their what so
@@ -50,6 +51,8 @@ my @visited_pages;
 
 # Maps a given word to an array of links that contain that word
 my %word_index;
+
+my $num_page_visits = 0;
 
 # ---- Start the script ---- #
 main;
@@ -86,9 +89,7 @@ sub main {
 
                 push @visited_pages, $link;
 
-                my $len = scalar @links_in_next_layer;
-
-                if ($len >= 1000) {
+                if ($num_page_visits >= 1000) {
                     last;
                 }
 
@@ -99,12 +100,31 @@ sub main {
         $depth += 1;
     }
 
-    # Print out the index
-    foreach my $key (keys %word_index) {
+    # Write the index to the output file
+
+    my $index_filename = $dir . $name;
+    open(my $filehandler, '>', $index_filename) or die "Could not open the file $index_filename\n";
+
+    foreach my $key (sort keys %word_index) {
         my @a = @{$word_index{$key}};
-        say $key;
-        say foreach @a;
+        print $filehandler $key;
+
+        foreach (@a) {
+            print $filehandler ",";
+            print $filehandler $_;
+        }
+
+        print $filehandler "\n";
     }
+
+    close($filehandler);
+
+    # Print out the index
+    # foreach my $key (keys %word_index) {
+    #     my @a = @{$word_index{$key}};
+    #     say $key;
+    #     say foreach @a;
+    # }
 
 }
 
@@ -138,15 +158,15 @@ sub build_link_array {
         my($link, $element, $attr, $tag) = @$_;
         unless ($wikipedia_base_url . $link ~~ @links_in_next_layer || $link !~ /^\/wiki\/.+/g || $link =~ /^\/wiki\/\w+:/) {
             push @links_in_next_layer, $wikipedia_base_url . $link;
+            $num_page_visits += 1;
         }
-        my $len = scalar @links_in_next_layer;
-        if ($len >= 1000) {
+
+        if ($num_page_visits >= 1000) {
             last;
         }
     }
 
-    my $n_links = scalar @links_in_next_layer;
-    say "Links found: $n_links";
+    say "Number of page visits: $num_page_visits";
 }
 
 # ---- Page Indexing ---- #
