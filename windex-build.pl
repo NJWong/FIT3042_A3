@@ -29,16 +29,7 @@ my $cwd = getcwd;
 
 # List of 100 most common words that we won't index
 # Taken from https://en.wikipedia.org/wiki/Most_common_words_in_English
-# TODO move this to an exclude file
-my @word_blacklist = qw( the be to of and a in that have I it for not on with
-                        he as you do at this but his by from they we say her
-                        she or an will my one all would there their what so
-                        up out if about who get which go me when make can like
-                        time no just him know take people into year your good
-                        some could them see other than then now look only come
-                        its over think also back after use two how our work
-                        first well way even new want because any these give
-                        day most us );
+my @word_blacklist;
 
 my $wikipedia_base_url = "https://en.wikipedia.org";
 
@@ -52,6 +43,8 @@ my @visited_pages;
 # Maps a given word to an array of links that contain that word
 my %word_index;
 
+my $links_found = 0;
+
 my $num_page_visits = 0;
 
 # ---- Start the script ---- #
@@ -62,46 +55,42 @@ sub main {
     set_options;
     show_options;
 
+    # Load the exception words
+    open (my $fh, '<', $excludefile) or die "Could not open $excludefile";
+    @word_blacklist = split(" ", <$fh>);
+    close($fh);
+
     # Initiate
     push @links_in_next_layer, $starturl;
 
     my $depth = 0;
 
     while ($depth <= 1) {
-
         say "------ Depth: $depth ------";
 
-        # Copy over the links for the next depth
         @links_to_visit = @links_in_next_layer;
 
         @links_in_next_layer = ();
 
-        # Index each page and build the links for the next layer
-        foreach my $link (@links_to_visit) {
+        while (scalar @links_to_visit > 0) {
+            my $next_page_url = shift @links_to_visit;
 
-            @visited_pages = ();
+            index_page $next_page_url;
+            $num_page_visits += 1;
+            usleep(200);
 
-            unless ($link ~~ @visited_pages) {
-                index_page $link;
-                usleep(200);
+            say "Pages Visited: $num_page_visits";
 
-                build_link_array $link;
-
-                push @visited_pages, $link;
-
-                if ($num_page_visits >= 1000) {
-                    last;
-                }
-
-                usleep(200);
+            if ($num_page_visits >= 50) {
+                last;
             }
         }
 
+        say "Completed!";
         $depth += 1;
     }
 
     # Write the index to the output file
-
     my $index_filename = $dir . $name;
     open(my $filehandler, '>', $index_filename) or die "Could not open the file $index_filename\n";
 
@@ -118,55 +107,6 @@ sub main {
     }
 
     close($filehandler);
-
-    # Print out the index
-    # foreach my $key (keys %word_index) {
-    #     my @a = @{$word_index{$key}};
-    #     say $key;
-    #     say foreach @a;
-    # }
-
-}
-
-sub build_link_array {
-    my $current_url = $_[0];
-    my $user_agent = LWP::UserAgent->new();
-    my $current_page = $user_agent->get($current_url);
-
-    die "Couldn't get $current_url" unless defined $current_page;
-
-    # Add the current page to the visited links
-    push @visited_pages, $current_page;
-
-    my $page_content = $current_page->content;
-
-    # Create the HTML tree
-    my $tree = HTML::TreeBuilder->new();
-    $tree->parse($page_content);
-
-    # Make the tree strictly an HTML::Element type
-    $tree->elementify;
-
-    # Get the main article content
-    my $e = $tree->look_down("id", "mw-content-text");
-
-    # Get all the links
-    my @link_array = @{$e->extract_links('a')};    
-
-    # Filter the links we are interested in and store them
-    foreach (@link_array) {
-        my($link, $element, $attr, $tag) = @$_;
-        unless ($wikipedia_base_url . $link ~~ @links_in_next_layer || $link !~ /^\/wiki\/.+/g || $link =~ /^\/wiki\/\w+:/) {
-            push @links_in_next_layer, $wikipedia_base_url . $link;
-            $num_page_visits += 1;
-        }
-
-        if ($num_page_visits >= 1000) {
-            last;
-        }
-    }
-
-    say "Number of page visits: $num_page_visits";
 }
 
 # ---- Page Indexing ---- #
@@ -179,7 +119,7 @@ sub index_page {
     die "Couldn't get $current_url" unless defined $current_page;
 
     # Add the current page to the visited links
-    push @visited_pages, $current_page;
+    push @visited_pages, $current_url;
 
     my $page_content = $current_page->content;
 
@@ -194,13 +134,25 @@ sub index_page {
     my $e = $tree->look_down("id", "mw-content-text");
 
     # Get all the links
-    # my @link_array = @{$e->extract_links('a')};
+    my @link_array = @{$e->extract_links('a')};
 
-    # Filter the links we are interested in and store them
-    # foreach (@link_array) {
-    #     my($link, $element, $attr, $tag) = @$_;
-    #     push @links_to_visit, $link unless $link ~~ @links_to_visit || $link !~ /^\/wiki\/.+/g || $link =~ /^\/wiki\/\w+:/;
-    # }
+    foreach (@link_array) {
+        my($link, $element, $attr, $tag) = @$_;
+
+        if ($links_found >= 1000) {
+            last;
+        }
+
+        if ($wikipedia_base_url . $link ~~ @visited_pages) {
+            say "I've been to $link";
+        }
+
+        # Add a link to the next layer of links, unless we've already visited it, or we have already added it
+        unless ($wikipedia_base_url . $link ~~ @visited_pages || $wikipedia_base_url . $link ~~ @links_in_next_layer || $link !~ /^\/wiki\/.+/g || $link =~ /^\/wiki\/\w+:/) {
+            push @links_in_next_layer, $wikipedia_base_url . $link;
+            $links_found += 1;
+        }
+    }
 
     # Collect all elements and store them in a hash where:
     #   key = tag
@@ -227,8 +179,6 @@ sub index_page {
         }
     }
 }
-
-
 
 
 # ---- Argument Parsing ---- #
@@ -311,3 +261,48 @@ sub show_options {
     say "\tDirectory: " . $dir;
     print "\n";
 }
+
+
+
+
+#######
+# sub build_link_array {
+#     my $current_url = $_[0];
+#     my $user_agent = LWP::UserAgent->new();
+#     my $current_page = $user_agent->get($current_url);
+
+#     die "Couldn't get $current_url" unless defined $current_page;
+
+#     # Add the current page to the visited links
+#     push @visited_pages, $current_page;
+
+#     my $page_content = $current_page->content;
+
+#     # Create the HTML tree
+#     my $tree = HTML::TreeBuilder->new();
+#     $tree->parse($page_content);
+
+#     # Make the tree strictly an HTML::Element type
+#     $tree->elementify;
+
+#     # Get the main article content
+#     my $e = $tree->look_down("id", "mw-content-text");
+
+#     # Get all the links
+#     my @link_array = @{$e->extract_links('a')};    
+
+#     # Filter the links we are interested in and store them
+    # foreach (@link_array) {
+    #     my($link, $element, $attr, $tag) = @$_;
+    #     unless ($wikipedia_base_url . $link ~~ @links_in_next_layer || $link !~ /^\/wiki\/.+/g || $link =~ /^\/wiki\/\w+:/) {
+    #         push @links_in_next_layer, $wikipedia_base_url . $link;
+    #         $num_page_visits += 1;
+    #     }
+
+    #     if ($num_page_visits >= 1000) {
+    #         last;
+    #     }
+    # }
+
+#     say "Number of page visits: $num_page_visits";
+# }
