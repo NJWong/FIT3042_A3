@@ -8,6 +8,7 @@ use warnings;
 # Imports
 use Cwd;
 use LWP::UserAgent;
+use Time::HiRes "usleep";
 # use LWP::Protocol;
 use HTTP::Response;
 use HTML::TreeBuilder 5 -weak;
@@ -15,7 +16,7 @@ use HTML::TreeBuilder 5 -weak;
 # ---- Global Variables ---- #
 
 # Function prototypes
-use subs qw( main set_options show_options get_page_content parse_html );
+use subs qw( main set_options show_options build_link_array index_page parse_html );
 
 # Variables for mandatory arguments
 my ( $name, $starturl, $excludefile );
@@ -40,19 +41,82 @@ my @word_blacklist = qw( the be to of and a in that have I it for not on with
 
 my $wikipedia_base_url = "https://en.wikipedia.org";
 
+# Array to store links of interest
+my @links_to_visit;
+my @links_in_next_layer;
+
+# Array to store visited pages
+my @visited_pages;
+
+# Maps a given word to an array of links that contain that word
+my %word_index;
+
+# ---- Start the script ---- #
+main;
+
 # Main function
 sub main {
     set_options;
     show_options;
 
-    # Get the page contant
-    # my $page_content = get_page_content;
+    # Initiate
+    push @links_in_next_layer, $starturl;
 
-    my $current_url = $starturl;
+    my $depth = 0;
+
+    while ($depth <= 1) {
+
+        say "------ Depth: $depth ------";
+
+        # Copy over the links for the next depth
+        @links_to_visit = @links_in_next_layer;
+
+        @links_in_next_layer = ();
+
+        # Index each page and build the links for the next layer
+        foreach my $link (@links_to_visit) {
+
+            @visited_pages = ();
+
+            unless ($link ~~ @visited_pages) {
+                index_page $link;
+                usleep(200);
+
+                build_link_array $link;
+
+                push @visited_pages, $link;
+
+                my $len = scalar @links_in_next_layer;
+
+                if ($len >= 1000) {
+                    last;
+                }
+
+                usleep(200);
+            }
+        }
+
+        $depth += 1;
+    }
+
+    # Print out the index
+    foreach my $key (keys %word_index) {
+        my @a = @{$word_index{$key}};
+        say $key;
+        say foreach @a;
+    }
+
+}
+
+sub build_link_array {
+    my $current_url = $_[0];
     my $user_agent = LWP::UserAgent->new();
     my $current_page = $user_agent->get($current_url);
 
     die "Couldn't get $current_url" unless defined $current_page;
+
+    # Add the current page to the visited links
+    push @visited_pages, $current_page;
 
     my $page_content = $current_page->content;
 
@@ -67,79 +131,85 @@ sub main {
     my $e = $tree->look_down("id", "mw-content-text");
 
     # Get all the links
-    my $links = $e->extract_links('a');
+    my @link_array = @{$e->extract_links('a')};    
 
-    my @links_deref = @$links;
-
-    my @link_strings;
-
-    foreach (@links_deref) {
+    # Filter the links we are interested in and store them
+    foreach (@link_array) {
         my($link, $element, $attr, $tag) = @$_;
-        push @link_strings, $link unless $link ~~ @link_strings || $link !~ /^\/wiki\/.+/g || $link =~ /^\/wiki\/\w+:/;
-    }
-
-    say foreach sort @link_strings;
-
-    # Create a hash based on the tags within the main article content
-    my $e_map = $e->tagname_map;
-
-    # Dereference the hash reference
-    my %e_hash = %$e_map;
-
-    # Get all the paragraphs
-    my $a = $e_hash{"p"};
-
-    my @a_deref = @$a;
-
-    my @word_list;
-
-    foreach (@a_deref) {
-        my $para = $_->as_text;
-        foreach my $word ($para =~ /\w+/g) {
-            $word = lc $word;
-            push @word_list, $word unless $word ~~ @word_list || $word ~~ @word_blacklist;
+        unless ($wikipedia_base_url . $link ~~ @links_in_next_layer || $link !~ /^\/wiki\/.+/g || $link =~ /^\/wiki\/\w+:/) {
+            push @links_in_next_layer, $wikipedia_base_url . $link;
+        }
+        my $len = scalar @links_in_next_layer;
+        if ($len >= 1000) {
+            last;
         }
     }
 
-    # foreach (sort @word_list) {
-    #     print $_ . " ";
-    # }
-
-
-
-
-
-    
-
-    # my @e_text = $e->as_text;
-
-
-    # my @e_list = $e->content_list;
-
-    # foreach (@e_list) {
-    #     print $_->as_text() . "\n";
-    # }
-
+    my $n_links = scalar @links_in_next_layer;
+    say "Links found: $n_links";
 }
-
-# ---- Start the script ---- #
-main;
 
 # ---- Page Indexing ---- #
 
-sub get_page_content {
-    my $url = $starturl;
+sub index_page {
+    my $current_url = $_[0];
     my $user_agent = LWP::UserAgent->new();
-    my $page = $user_agent->get($url);
+    my $current_page = $user_agent->get($current_url);
 
-    die "Couldn't get $url" unless defined $page;
+    die "Couldn't get $current_url" unless defined $current_page;
 
-    return $page->content;
+    # Add the current page to the visited links
+    push @visited_pages, $current_page;
+
+    my $page_content = $current_page->content;
+
+    # Create the HTML tree
+    my $tree = HTML::TreeBuilder->new();
+    $tree->parse($page_content);
+
+    # Make the tree strictly an HTML::Element type
+    $tree->elementify;
+
+    # Get the main article content
+    my $e = $tree->look_down("id", "mw-content-text");
+
+    # Get all the links
+    # my @link_array = @{$e->extract_links('a')};
+
+    # Filter the links we are interested in and store them
+    # foreach (@link_array) {
+    #     my($link, $element, $attr, $tag) = @$_;
+    #     push @links_to_visit, $link unless $link ~~ @links_to_visit || $link !~ /^\/wiki\/.+/g || $link =~ /^\/wiki\/\w+:/;
+    # }
+
+    # Collect all elements and store them in a hash where:
+    #   key = tag
+    #   value = reference to array of elements with that tag
+    my %all_tags = %{$e->tagname_map};
+
+    # Get all the paragraphs
+    my @p_tags = @{$all_tags{"p"}};
+
+    foreach (@p_tags) {
+        my $para = $_->as_text;
+        foreach my $word ($para =~ /\w+/g) {
+            $word = lc $word;
+
+            unless ($word ~~ @word_blacklist) {
+                if (exists $word_index{$word}) {
+                    # Add the current url to the array of links, unless it's already there
+                    push @{$word_index{$word}}, $current_url unless $current_url ~~ @{$word_index{$word}};
+                } else {
+                    # Create a new hash entry and add the current url to the array
+                    @{$word_index{$word}} = ($current_url);
+                }
+            }
+        }
+    }
 }
 
-# sub parse_html(html_content) {
 
-# }
+
 
 # ---- Argument Parsing ---- #
 
