@@ -14,7 +14,9 @@ use HTML::TreeBuilder 5 -weak;
 # ---- Global Variables ---- #
 
 # Function prototypes
-use subs qw( main set_options show_options load_exception_file index_page write_index_to_file );
+use subs qw( main set_options show_options load_exception_file
+             breadth_first_traversal index_page remove_url_fragment
+             write_index_to_file );
 
 # Variables for mandatory arguments
 my ( $name, $starturl, $excludefile );
@@ -46,7 +48,7 @@ my %word_index;
 
 my $total_links_found = 0;
 my $num_page_visits = 0;
-my $max_page_visits = 500; #TODO change this to 1000 before submission
+my $max_page_visits = 1000; # CHANGE THIS
 
 # ---- Start the script ---- #
 main;
@@ -54,13 +56,23 @@ main;
 # Main function
 sub main {
 
+    # Initialise
     set_options;
     show_options;
     load_exception_file;
 
-    # Initiate
+    # Set the starting point for the BFT
+    # Don't forget to normalise it by making converting to lower case!
     push @links_in_next_layer, $starturl;
 
+    # Index pages based on BFT
+    breadth_first_traversal;
+
+    # Output results before finishing
+    write_index_to_file;
+}
+
+sub breadth_first_traversal {
     # Starting at layer 0 (the starting page)
     my $depth = 0;
 
@@ -68,6 +80,7 @@ sub main {
     while ($depth <= $maxdepth) {
         # Check if we have exceeded the maximum number of page visits
         if ($num_page_visits >= $max_page_visits) {
+            no warnings "exiting";
             last;
         }
 
@@ -90,25 +103,24 @@ sub main {
                 $num_page_visits += 1;
             
                 usleep(200);
-                say "Pages Visited: $num_page_visits";
+                say "   Pages Visited: $num_page_visits";
             } else {
                 say "Already visited $next_page_url";
             }
             
             if ($num_page_visits >= $max_page_visits) {
+                no warnings "exiting";
                 last;
             }
         }
 
         # This layer has been completely traversed using BFT
-        say "Completed!";
+        say "   Completed!";
         $depth += 1;
     }
 
-    # Output results before finishing
-    write_index_to_file;
-    
-    say "Visited: " . scalar @visited_pages;
+    # Alphabetically sorted list of the pages we visited
+    say foreach sort @visited_pages;
 }
 
 # Load the exception words
@@ -123,15 +135,19 @@ sub load_exception_file {
 sub index_page {
     my $current_url = $_[0];
     my $user_agent = LWP::UserAgent->new();
-    my $current_page = $user_agent->get($current_url);
-
-    die "Couldn't get $current_url" unless defined $current_page;
+    my $response = $user_agent->get($current_url);
 
     # We don't need to return to this page again
     push @visited_pages, $current_url;
 
+    unless ($response->is_success) {
+        say "Page not reached: $current_url";
+        say $response->status_line;
+        return;
+    }
+
     # Create a tree structure from the HTML we retrieved
-    my $page_content = $current_page->content;
+    my $page_content = $response->content;
     my $tree = HTML::TreeBuilder->new();
     $tree->parse($page_content);
 
@@ -143,6 +159,7 @@ sub index_page {
 
     # Don't worry about the reference list
     my $reference_list = $tree->look_down("class", "references");
+
     if (defined $reference_list) {
         $reference_list->detach();
     }
@@ -155,7 +172,19 @@ sub index_page {
         my($link, $element, $attr, $tag) = @$_;
 
         # Populate the array of links with links of interest
+        # Note: the /^\/wiki\/\w+:/ pattern filters out pages like ... /wiki/Portal: ...
         unless ($wikipedia_base_url . $link ~~ @visited_pages || $wikipedia_base_url . $link ~~ @links_in_next_layer || $link !~ /^\/wiki\/.+/g || $link =~ /^\/wiki\/\w+:/) {
+            
+            # Normalise using URL fragment removal
+            if ($link =~ /#.+$/) {
+                say "Fragment found $link. Removing fragment...";
+                my @split = split(/#.+/, $link);
+                $link = $split[0];
+            }
+
+            # Normalise the URL by converting literal commas with the ASCII representation
+            $link =~ s/,/%2C/g;
+
             push @links_in_next_layer, $wikipedia_base_url . $link;
             $total_links_found += 1;
         }
@@ -189,6 +218,7 @@ sub index_page {
         push @word_elements, @{$all_tags{"li"}};
     }
 
+    # Filter out the words in the relevant elements
     foreach (@word_elements) {
         my $para = $_->as_text;
         foreach my $word ($para =~ /\w+/g) {
@@ -242,6 +272,9 @@ sub set_options {
 
     # Arg2 string must not be empty
     die "Error - Invalid arg2: \"" . scalar $ARGV[1] . "\". Invalid Start URL" unless $ARGV[1] =~ /.+\.wikipedia\.org\/.*/;
+
+    # Normalise $starturl by converting literal commas to the ASCII representation
+    $starturl =~ s/,/%2C/g;
 
     # Arg3 string must point to an existing plain file
     die "Error - Invalid arg3: \"" . scalar $ARGV[2] . "\". File does not exist" unless -f $cwd . "/" . scalar $ARGV[2];
