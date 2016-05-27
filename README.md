@@ -136,28 +136,28 @@ If you wanted to search for the word 'variable', you would run:
 
 and get the following output:
 
------- START windex.sh ------
+	------ START windex.sh ------
 
-Valid path: "/home/nick/Desktop/FIT3042_A3/index_files/index_1000"
+	Valid path: "/home/nick/Desktop/FIT3042_A3/index_files/index_1000"
 
-variable
-https://en.wikipedia.org/wiki/Perl
-https://en.wikipedia.org/wiki/Functional_programming
-https://en.wikipedia.org/wiki/Imperative_programming
-https://en.wikipedia.org/wiki/Object-oriented_programming
-https://en.wikipedia.org/wiki/Procedural_programming
-https://en.wikipedia.org/wiki/Generic_programming
-https://en.wikipedia.org/wiki/Larry_Wall
-https://en.wikipedia.org/wiki/Type_system
-...
-<LOTS OF LINKS>
-...
-https://en.wikipedia.org/wiki/Pattern_matching
-https://en.wikipedia.org/wiki/Algebraic_data_types
-https://en.wikipedia.org/wiki/Lazy_evaluation
-https://en.wikipedia.org/wiki/Tail_recursion
+	variable
+	https://en.wikipedia.org/wiki/Perl
+	https://en.wikipedia.org/wiki/Functional_programming
+	https://en.wikipedia.org/wiki/Imperative_programming
+	https://en.wikipedia.org/wiki/Object-oriented_programming
+	https://en.wikipedia.org/wiki/Procedural_programming
+	https://en.wikipedia.org/wiki/Generic_programming
+	https://en.wikipedia.org/wiki/Larry_Wall
+	https://en.wikipedia.org/wiki/Type_system
 
------- END windex.sh ------
+	...
+
+	https://en.wikipedia.org/wiki/Pattern_matching
+	https://en.wikipedia.org/wiki/Algebraic_data_types
+	https://en.wikipedia.org/wiki/Lazy_evaluation
+	https://en.wikipedia.org/wiki/Tail_recursion
+
+	------ END windex.sh ------
 
 
 ## Known Bugs
