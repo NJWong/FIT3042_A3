@@ -145,15 +145,38 @@ sub breadth_first_traversal {
     say foreach sort @visited_pages;
 }
 
-# Load the exception words
+################################################################################
+# Function:             load_exception_file
+# Description:          Loads the words in the exclude file into a local array
+#
+# Preconditions:        1. Program has been initialised using set_options() and 
+#                          load_exception_file().
+#                       2. @word_blacklist is initialised
+#                       3. The exception file exists
+#
+# Postconditions:       @word_blacklist is populated with words to ignore during
+#                       the indexing process.
+################################################################################
 sub load_exception_file {
     open (my $fh, '<', $excludefile) or die "Could not open $excludefile";
     @word_blacklist = split(" ", <$fh>);
     close($fh);
 }
 
-# ---- Page Indexing ---- #
-
+################################################################################
+# Function:             index_page
+# Description:          Visits the page located by the URL passed in as an
+#                       argument. Since this is a wikipedia page, get the div
+#                       element with the id of 'mw-content-text' and index the
+#                       words in that.
+#
+# Preconditions:        1. A valid Wikipedia URL is passed in as an argument
+#                       2. @visited_pages is initialised
+#                       3. %word_index is initialised
+#
+# Postconditions:       1. Words are indexed into the %word_index hash.
+#                       2. This page URL is added to @visited_pages
+################################################################################
 sub index_page {
     my $current_url = $_[0];
     my $user_agent = LWP::UserAgent->new();
@@ -259,6 +282,17 @@ sub index_page {
     }
 }
 
+################################################################################
+# Function:             write_index_to_file
+# Description:          Write the entries in the %word_index has to an output
+#                       file in CSV format specified in the assignment sheet.
+#
+# Preconditions:        1. %word_index is initialised
+#                       2. The file at '$dir/$name' exists
+#
+# Postconditions:       Words are written to the index file as expected in the
+#                       assignment sheet.
+################################################################################
 sub write_index_to_file {
     my $index_filename = $dir . $name;
     open(my $filehandler, '>', $index_filename) or die "Could not open the file $index_filename\n";
@@ -278,7 +312,16 @@ sub write_index_to_file {
     close($filehandler);
 }
 
-# ---- Argument Parsing ---- #
+################################################################################
+# Function:             set_options
+# Description:          Parse and validate the command line arguments, and then
+#                       set the options for this run.
+#
+# Preconditions:        None
+#
+# Postconditions:       Options for this run are set, either to default values
+#                       or user defined values. These values are all validated.
+################################################################################
 sub set_options {
 
     # Check number of arguments - between 3 and 5 (inclusive)
@@ -353,7 +396,15 @@ sub set_options {
     $maxdepth = 3 unless defined $maxdepth;
 }
 
-# Display the options that the script is running with
+################################################################################
+# Function:             show_options
+# Description:          Helpful function to show the values of the options set
+#                       for this run.
+#
+# Preconditions:        Options are set using set_options()
+#
+# Postconditions:       Options are shown in the standard output.
+################################################################################
 sub show_options {
     say "\nRunning script with the following options:";
     say "\tIndex name: " . $name;
