@@ -4,6 +4,7 @@ use 5.18.0;
 
 use strict;
 use warnings;
+no warnings 'experimental::smartmatch'; # The '~~' operator is experimental, suppress usage warnings
 
 # Imports
 use Cwd;
@@ -177,7 +178,7 @@ sub index_page {
             
             # Normalise using URL fragment removal
             if ($link =~ /#.+$/) {
-                say "Fragment found $link. Removing fragment...";
+                # say "Fragment found $link. Removing fragment...";
                 my @split = split(/#.+/, $link);
                 $link = $split[0];
             }
@@ -220,8 +221,8 @@ sub index_page {
 
     # Filter out the words in the relevant elements
     foreach (@word_elements) {
-        my $para = $_->as_text;
-        foreach my $word ($para =~ /\w+/g) {
+        my $element_text = $_->as_text;
+        foreach my $word ($element_text =~ /\w+/g) {
             $word = lc $word;
 
             unless ($word ~~ @word_blacklist) {
@@ -290,6 +291,9 @@ sub set_options {
 
             if ($value >= 0 and $value <= 5) {
                 $maxdepth = $value;
+            } else {
+                say "Invalid maxdepth, setting to default=3.";
+                $maxdepth = 3;
             }
         } elsif ($ARGV[3] =~ /^dir=\w+/) {
 
