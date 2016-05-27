@@ -92,6 +92,9 @@ Excluded words are defined in a *.txt file, on a single line separated by spaces
 
 At the start of the Perl script, this file is read in, parsed, and then stored in the @word_blacklist array.
 
+#### Valid URLs
+A valid URL must be within the 
+
 #### URL Normalisation
 Two normalisation techniques are used:
 
@@ -118,12 +121,13 @@ Two normalisation techniques are used:
 
 		on two lines.
 
-		Thus, all commas in the URL are replaced with the ASCII representation '%2C'. This replacement is only used on comma literals since we were storing URLs in a CSV format. Therefore, the replacement was critical. It can be extended to other reserved characters in the future (e.g. '!')
+		Thus, all commas in the URL are replaced with the ASCII representation '%2C'.
 
-A technique that was attempted but was not successful was converting the URL to lowercase. This would work in most cases (so .../wiki/perl would redirect to .../wiki/Perl), however would not work for others. For example:
+		en.wikipedia.org/wiki/Broome,_Western_Australia -> en.wikipedia.org/wiki/Broome%2C_Western_Australia
 
-	'.../wiki/AWK_(programming_language)' would redirect to '.../wiki/AWK', however
-	'.../wiki/awk_(programming_language)' would return a 404 error
+		This replacement is only used on comma literals since we were storing URLs in a CSV format. Therefore, the replacement was critical. It can be extended to other reserved characters in the future (e.g. '!')
+
+While not specifically a normalisation technique, some further URL parsing is done to remove special Wikipedia pages such as the 'edit' pages, or '.../wiki/Portal:Contents'. Also, pages that of the pattern 'en.wikipedia.org/w/...' are not visited and indexed.
 
 ### Showing the Index
 This is done using the windex.sh Bash script as explained above.
@@ -159,6 +163,31 @@ and get the following output:
 
 	------ END windex.sh ------
 
+## Limitations
+
+### By Design
+To reduce the load on Wikipedia's servers, the program is limited in the following ways:
+
+	- Max depth for breadth first traversal is 5, after that the program will close
+	- usleep(200) is called after every page is indexed
+	- Maximum page indexes is 1000, after that the program will close
+
+The definition for a "word" is very liberal - essentially if it matches /\w+/, then it counts as a word and is indexed. Thus, strings like the year '1980' or 'hello_0' are considered words, and are indexed accordingly.
+
+### Constraints
+On average, it takes around 1 second (+/- 0.5 second) to visit a web page, get the content, parse the content into a tree, and then index the page. With the addition on the 0.2 second delay from the usleep() call, this means that indexing 1000 pages could take around 1000 seconds (> 16 minutes!) to run.
+
+I would recommend either getting a coffee while it runs... or change '@max_page_visits' to a more reasonable value (300 or 500).
+
+For convenience, the depth counter and pages visited counter is displayed to stdout at runtime to show the indexing progress.
 
 ## Known Bugs
-normalisation capitalisation
+
+A technique that was attempted but was not successful was converting the URL to lowercase. This would work in most cases (so .../wiki/perl would redirect to .../wiki/Perl), however would not work for others. For example:
+
+	'.../wiki/AWK_(programming_language)' would redirect to '.../wiki/AWK', however
+	'.../wiki/awk_(programming_language)' would return a 404 error
+
+The above example shows two known bugs:
+1. Pages like .../wiki/AWK_(programming_language) will be indexed even if .../wiki/AWK has been indexed
+2. Pages like .../wiki/JavaScript will be indexed even if .../wiki/javascript has been indexed

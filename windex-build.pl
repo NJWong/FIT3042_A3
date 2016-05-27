@@ -54,7 +54,16 @@ my $max_page_visits = 1000; # CHANGE THIS
 # ---- Start the script ---- #
 main;
 
-# Main function
+################################################################################
+# Function:             main
+# Description:          Runs the steps in which the script should run.
+#
+# Preconditions:        None
+#
+# Postconditions:       An output index file specified by the CLAs containing
+#                       all of the indexed words and associated URLs in CSV
+#                       format.
+################################################################################
 sub main {
 
     # Initialise
@@ -73,6 +82,18 @@ sub main {
     write_index_to_file;
 }
 
+################################################################################
+# Function:             breadth_first_traversal
+# Description:          Performs web page traversal using breadth first traversal
+#
+# Preconditions:        1. Program has been initialised using set_options() and 
+#                          load_exception_file().
+#                       2. @links_in_next_layer has at least one valid URL
+#
+# Postconditions:       An output index file specified by the CLAs containing
+#                       all of the indexed words and associated URLs in CSV
+#                       format.
+################################################################################
 sub breadth_first_traversal {
     # Starting at layer 0 (the starting page)
     my $depth = 0;
@@ -177,9 +198,9 @@ sub index_page {
         unless ($wikipedia_base_url . $link ~~ @visited_pages || $wikipedia_base_url . $link ~~ @links_in_next_layer || $link !~ /^\/wiki\/.+/g || $link =~ /^\/wiki\/\w+:/) {
             
             # Normalise using URL fragment removal
-            if ($link =~ /#.+$/) {
+            if ($link =~ /#.*$/) {
                 # say "Fragment found $link. Removing fragment...";
-                my @split = split(/#.+/, $link);
+                my @split = split(/#.*/, $link);
                 $link = $split[0];
             }
 
